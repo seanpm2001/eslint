@@ -156,6 +156,58 @@ ruleTester.run("no-loop-func", rule, {
         {
             code: "for (let i = 0; i < 10; ++i) { for (let x in xs.filter(x => x != undeclared)) {  } }",
             parserOptions: { ecmaVersion: 6 }
+        },
+
+        // IIFE
+        {
+            code: `
+            let current = getStart();
+            while (current) {
+            (() => {
+                current;
+                current.a;
+                current.b;
+                current.c;
+                current.d;
+            })();
+            
+            current = current.upper;
+            }
+            `,
+            parserOptions: { ecmaVersion: 6 }
+        },
+        "for (var i=0; (function() { i; })(), i<l; i++) { }",
+        "for (var i=0; i<l; (function() { i; })(), i++) { }",
+        {
+            code: "for (let i = 0; i < 10; ++i) { (()=>{ i;})() }",
+            parserOptions: { ecmaVersion: 6 }
+        },
+        {
+            code: "for (let i = 0; i < 10; ++i) { (function a(){i;})() }",
+            parserOptions: { ecmaVersion: 6 }
+        },
+        {
+            code: `
+            var arr = [];
+
+            for (var i = 0; i < 5; i++) {
+                arr.push((f => f)((() => i)()));
+            }
+            `,
+            parserOptions: { ecmaVersion: 6 }
+        },
+        {
+            code: `
+            var arr = [];
+
+            for (var i = 0; i < 5; i++) {
+                arr.push((() => {
+                    return (() => i)();
+                })());
+            }
+            `,
+            parserOptions: { ecmaVersion: 6 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "ArrowFunctionExpression" }]
         }
 
     ],
@@ -189,14 +241,6 @@ ruleTester.run("no-loop-func", rule, {
         {
             code: "for (var i=0; i < l; i++) { function a() { i; }; a(); }",
             errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "FunctionDeclaration" }]
-        },
-        {
-            code: "for (var i=0; (function() { i; })(), i<l; i++) { }",
-            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "FunctionExpression" }]
-        },
-        {
-            code: "for (var i=0; i<l; (function() { i; })(), i++) { }",
-            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "FunctionExpression" }]
         },
 
         // Warns functions which are using modified variables.
@@ -269,6 +313,89 @@ ruleTester.run("no-loop-func", rule, {
             code: "let a; function foo() { a = 10; for (let x of xs) { (function() { a; }); } } foo();",
             parserOptions: { ecmaVersion: 6 },
             errors: [{ messageId: "unsafeRefs", data: { varNames: "'a'" }, type: "FunctionExpression" }]
+        },
+
+        // IIFE
+        {
+            code: "let a; for (var i=0; i<l; i++) { (function* (){i;})() }",
+            parserOptions: { ecmaVersion: 6 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "FunctionExpression" }]
+        },
+        {
+            code: "let a; for (var i=0; i<l; i++) { (async function (){i;})() }",
+            parserOptions: { ecmaVersion: 2022 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "FunctionExpression" }]
+        },
+        {
+            code: `
+            let current = getStart();
+            const arr = [];
+            while (current) {
+                (function f() {
+                    current;
+                    arr.push(f);
+                })();
+                
+                current = current.upper;
+            }
+            `,
+            parserOptions: { ecmaVersion: 6 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'current'" }, type: "FunctionExpression" }]
+        },
+        {
+            code: `
+            var arr = [];
+
+            for (var i = 0; i < 5; i++) {
+                (function fun () {
+                    if (arr.includes(fun)) return i;
+                    else arr.push(fun);
+                })();
+            }
+            `,
+            parserOptions: { ecmaVersion: 6 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "FunctionExpression" }]
+        },
+        {
+            code: `
+            let current = getStart();
+            const arr = [];
+            while (current) {
+                const p = (async () => {
+                    await someDelay();
+                    current;
+                })();
+
+                arr.push(p);
+                current = current.upper;
+            }
+            `,
+            parserOptions: { ecmaVersion: 2022 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'current'" }, type: "ArrowFunctionExpression" }]
+        },
+        {
+            code: `
+            var arr = [];
+
+            for (var i = 0; i < 5; i++) {
+                arr.push((f => f)(() => i));
+            }
+            `,
+            parserOptions: { ecmaVersion: 6 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "ArrowFunctionExpression" }]
+        },
+        {
+            code: `
+            var arr = [];
+
+            for (var i = 0; i < 5; i++) {
+                arr.push((() => {
+                    return () => i;
+                })());
+            }
+            `,
+            parserOptions: { ecmaVersion: 6 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "ArrowFunctionExpression" }]
         }
     ]
 });
