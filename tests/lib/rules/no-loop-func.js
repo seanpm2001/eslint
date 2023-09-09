@@ -206,8 +206,7 @@ ruleTester.run("no-loop-func", rule, {
                 })());
             }
             `,
-            parserOptions: { ecmaVersion: 6 },
-            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "ArrowFunctionExpression" }]
+            parserOptions: { ecmaVersion: 6 }
         }
 
     ],
@@ -391,6 +390,45 @@ ruleTester.run("no-loop-func", rule, {
             for (var i = 0; i < 5; i++) {
                 arr.push((() => {
                     return () => i;
+                })());
+            }
+            `,
+            parserOptions: { ecmaVersion: 6 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "ArrowFunctionExpression" }]
+        },
+        {
+            code: `
+            var arr = [];
+
+            for (var i = 0; i < 5; i++) {
+                arr.push((() => {
+                    return () => { return i };
+                })());
+            }
+            `,
+            parserOptions: { ecmaVersion: 6 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "ArrowFunctionExpression" }]
+        },
+        {
+            code: `
+            var arr = [];
+
+            for (var i = 0; i < 5; i++) {
+                arr.push((() => {
+                    return () => { return () => i };
+                })());
+            }
+            `,
+            parserOptions: { ecmaVersion: 6 },
+            errors: [{ messageId: "unsafeRefs", data: { varNames: "'i'" }, type: "ArrowFunctionExpression" }]
+        },
+        {
+            code: `
+            var arr = [];
+
+            for (var i = 0; i < 5; i++) {
+                arr.push((() => {
+                    return () => (() => i)();
                 })());
             }
             `,
