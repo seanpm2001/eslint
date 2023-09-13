@@ -34,7 +34,7 @@ In this case, each function created within the loop returns a different number a
 
 This error is raised to highlight a piece of code that may not work as you expect it to and could also indicate a misunderstanding of how the language works. Your code may run without any problems if you do not fix this error, but in some situations it could behave unexpectedly.
 
-This rule disallows any function within a loop that contains unsafe references (e.g. to modified variables from the outer scope). This rule ignores IIFEs but not async or generator functions.
+This rule disallows any function within a loop, including async functions and generators, that contains unsafe references (e.g. to modified variables from the outer scope). This rule ignores immediately-invoked function expressions (IIFEs) because they do not persist outside of the loop and are therefore always safe.
 
 Examples of **incorrect** code for this rule:
 
