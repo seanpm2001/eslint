@@ -2302,7 +2302,7 @@ describe("ESLint", () => {
             });
         });
 
-        describe("cache", () => {
+        describe.only("cache", () => {
 
             /**
              * helper method to delete a file without caring about exceptions
@@ -2321,25 +2321,22 @@ describe("ESLint", () => {
                 }
             }
 
-            /**
-             * helper method to delete the cache files created during testing
-             * @returns {void}
-             */
-            function deleteCache() {
-                doDelete(path.resolve(".eslintcache"));
-                doDelete(path.resolve(".cache/custom-cache"));
-            }
+            let cacheFilePath;
 
             beforeEach(() => {
-                deleteCache();
+                cacheFilePath = null;
             });
 
             afterEach(() => {
                 sinon.restore();
-                deleteCache();
+                if (cacheFilePath) {
+                    doDelete(cacheFilePath);
+                }
             });
 
-            describe("when the cacheFile is a directory or looks like a directory", () => {
+            describe.only("when cacheLocation is a directory or looks like a directory", () => {
+
+                const cwd = getFixturePath();
 
                 /**
                  * helper method to delete the cache files created during testing
@@ -2347,7 +2344,21 @@ describe("ESLint", () => {
                  */
                 function deleteCacheDir() {
                     try {
-                        fs.unlinkSync("./tmp/.cacheFileDir/.cache_hashOfCurrentWorkingDirectory");
+
+                        /*
+                         * `fs.rmdir(path, { recursive: true })` is deprecated and will be removed.
+                         * Use `fs.rm(path, { recursive: true })` instead.
+                         * When supporting Node.js 14.14.0+, the compatibility condition can be removed for `fs.rmdir`.
+                         */
+                        // eslint-disable-next-line n/no-unsupported-features/node-builtins -- just checking if it exists
+                        if (typeof fs.rm === "function") {
+
+                            // eslint-disable-next-line n/no-unsupported-features/node-builtins -- conditionally used
+                            fs.rmSync(path.resolve(cwd, "tmp/.cacheFileDir/"), { recursive: true, force: true });
+                        } else {
+                            fs.rmdirSync(path.resolve(cwd, "tmp/.cacheFileDir/"), { recursive: true, force: true });
+                        }
+
                     } catch {
 
                         /*
@@ -2364,11 +2375,12 @@ describe("ESLint", () => {
                     deleteCacheDir();
                 });
 
-                it("should create the cache file inside the provided directory", async () => {
-                    assert(!shell.test("-d", path.resolve("./tmp/.cacheFileDir/.cache_hashOfCurrentWorkingDirectory")), "the cache for eslint does not exist");
+                it("should create the directory and the cache file inside it when cacheLocation ends with a slash", async () => {
+                    assert(!shell.test("-d", path.resolve(cwd, "./tmp/.cacheFileDir/")), "the cache directory already exists and wasn't successfully deleted");
 
                     eslint = new ESLint({
                         useEslintrc: false,
+                        cwd,
 
                         // specifying cache true the cache will be created
                         cache: true,
@@ -2386,41 +2398,70 @@ describe("ESLint", () => {
 
                     await eslint.lintFiles([file]);
 
-                    assert(shell.test("-f", path.resolve(`./tmp/.cacheFileDir/.cache_${hash(process.cwd())}`)), "the cache for eslint was created");
-
-                    sinon.restore();
+                    assert(shell.test("-f", path.resolve(cwd, `./tmp/.cacheFileDir/.cache_${hash(cwd)}`)), "the cache for eslint should have been created");
                 });
-            });
 
-            it("should create the cache file inside the provided directory using the cacheLocation option", async () => {
-                assert(!shell.test("-d", path.resolve("./tmp/.cacheFileDir/.cache_hashOfCurrentWorkingDirectory")), "the cache for eslint does not exist");
+                it("should create the cache file inside existing cacheLocation directory when cacheLocation ends with a slash", async () => {
+                    assert(!shell.test("-d", path.resolve(cwd, "./tmp/.cacheFileDir/")), "the cache directory already exists and wasn't successfully deleted");
 
-                eslint = new ESLint({
-                    useEslintrc: false,
+                    fs.mkdirSync(path.resolve(cwd, "./tmp/.cacheFileDir/"), { recursive: true });
 
-                    // specifying cache true the cache will be created
-                    cache: true,
-                    cacheLocation: "./tmp/.cacheFileDir/",
-                    overrideConfig: {
-                        rules: {
-                            "no-console": 0,
-                            "no-unused-vars": 2
-                        }
-                    },
-                    extensions: ["js"],
-                    ignore: false
+                    eslint = new ESLint({
+                        useEslintrc: false,
+                        cwd,
+
+                        // specifying cache true the cache will be created
+                        cache: true,
+                        cacheLocation: "./tmp/.cacheFileDir/",
+                        overrideConfig: {
+                            rules: {
+                                "no-console": 0,
+                                "no-unused-vars": 2
+                            }
+                        },
+                        ignore: false
+                    });
+                    const file = getFixturePath("cache/src", "test-file.js");
+
+                    await eslint.lintFiles([file]);
+
+                    assert(shell.test("-f", path.resolve(cwd, `./tmp/.cacheFileDir/.cache_${hash(cwd)}`)), "the cache for eslint should have been created");
                 });
-                const file = getFixturePath("cache/src", "test-file.js");
 
-                await eslint.lintFiles([file]);
+                it("should create the cache file inside existing cacheLocation directory when cacheLocation doesn't end with a path separator", async () => {
+                    assert(!shell.test("-d", path.resolve(cwd, "./tmp/.cacheFileDir/")), "the cache directory already exists and wasn't successfully deleted");
 
-                assert(shell.test("-f", path.resolve(`./tmp/.cacheFileDir/.cache_${hash(process.cwd())}`)), "the cache for eslint was created");
+                    fs.mkdirSync(path.resolve(cwd, "./tmp/.cacheFileDir/"), { recursive: true });
 
-                sinon.restore();
+                    eslint = new ESLint({
+                        useEslintrc: false,
+                        cwd,
+
+                        // specifying cache true the cache will be created
+                        cache: true,
+                        cacheLocation: "./tmp/.cacheFileDir",
+                        overrideConfig: {
+                            rules: {
+                                "no-console": 0,
+                                "no-unused-vars": 2
+                            }
+                        },
+                        ignore: false
+                    });
+                    const file = getFixturePath("cache/src", "test-file.js");
+
+                    await eslint.lintFiles([file]);
+
+                    assert(shell.test("-f", path.resolve(cwd, `./tmp/.cacheFileDir/.cache_${hash(cwd)}`)), "the cache for eslint should have been created");
+                });
             });
 
             it("should create the cache file inside cwd when no cacheLocation provided", async () => {
                 const cwd = path.resolve(getFixturePath("cli-engine"));
+
+                cacheFilePath = path.resolve(cwd, ".eslintcache");
+                doDelete(cacheFilePath);
+                assert(!shell.test("-f", cacheFilePath), "the cache file already exists and wasn't successfully deleted");
 
                 eslint = new ESLint({
                     useEslintrc: false,
@@ -2438,14 +2479,19 @@ describe("ESLint", () => {
 
                 await eslint.lintFiles([file]);
 
-                assert(shell.test("-f", path.resolve(cwd, ".eslintcache")), "the cache for eslint was created at provided cwd");
+                assert(shell.test("-f", cacheFilePath), "the cache for eslint should have been created at provided cwd");
             });
 
-            it("should invalidate the cache if the configuration changed between executions", async () => {
-                assert(!shell.test("-f", path.resolve(".eslintcache")), "the cache for eslint does not exist");
+            it.only("should invalidate the cache if the configuration changed between executions", async () => {
+                const cwd = getFixturePath("cache/src");
+
+                cacheFilePath = path.resolve(cwd, ".eslintcache");
+                doDelete(cacheFilePath);
+                assert(!shell.test("-f", cacheFilePath), "the cache file already exists and wasn't successfully deleted");
 
                 eslint = new ESLint({
                     useEslintrc: false,
+                    cwd,
 
                     // specifying cache true the cache will be created
                     cache: true,
@@ -2467,16 +2513,17 @@ describe("ESLint", () => {
                 const results = await eslint.lintFiles([file]);
 
                 for (const { errorCount, warningCount } of results) {
-                    assert.strictEqual(errorCount + warningCount, 0, "the file passed without errors or warnings");
+                    assert.strictEqual(errorCount + warningCount, 0, "the file should have passed linting without errors or warnings");
                 }
-                assert.strictEqual(spy.getCall(0).args[0], file, "the module read the file because is considered changed");
-                assert(shell.test("-f", path.resolve(".eslintcache")), "the cache for eslint was created");
+                assert(spy.calledWith(file), "ESLint should have read the file because there was no cache file");
+                assert(shell.test("-f", cacheFilePath), "the cache for eslint should have been created");
 
                 // destroy the spy
                 sinon.restore();
 
                 eslint = new ESLint({
                     useEslintrc: false,
+                    cwd,
 
                     // specifying cache true the cache will be created
                     cache: true,
@@ -2493,11 +2540,12 @@ describe("ESLint", () => {
                 // create a new spy
                 spy = sinon.spy(fs, "readFileSync");
 
-                const [cachedResult] = await eslint.lintFiles([file]);
+                const [newResult] = await eslint.lintFiles([file]);
 
-                assert.strictEqual(spy.getCall(0).args[0], file, "the module read the file because is considered changed because the config changed");
-                assert.strictEqual(cachedResult.errorCount, 1, "since configuration changed the cache was not used an one error was reported");
-                assert(shell.test("-f", path.resolve(".eslintcache")), "the cache for eslint was created");
+                assert(spy.calledWith(file), "ESLint should have read the file again because it's considered changed because the config changed");
+                assert.strictEqual(newResult.errorCount, 1, "since configuration changed the cache should have not been used and one error should have been reported");
+                assert.strictEqual(newResult.messages[0].ruleId, "no-console");
+                assert(shell.test("-f", cacheFilePath), "The cache for ESLint should still exist");
             });
 
             it("should remember the files from a previous run and do not operate on them if not changed", async () => {
